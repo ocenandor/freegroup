@@ -1,11 +1,12 @@
-from functools import reduce
-from .tools import (
-    normalize, reduce_modulo_normal_closure,
-    generators
-)
+import multiprocessing as mp
 from collections import defaultdict
 from copy import deepcopy
-import multiprocessing as mp
+from functools import reduce
+
+import func_timeout
+import numpy as np
+
+from .tools import generators, normalize, reduce_modulo_normal_closure
 
 #current_depth = 0
 
@@ -220,12 +221,15 @@ def psi_pseudo_inverse(word, t, x, alpha, beta):
     return w
             
 
-def magnus_is_from_normal_closure(word, relator, T=None):
+def magnus_is_from_normal_closure(word, relator, T=None, timelimit=None):        
     T = set() if T is None else set([abs(LetterWithSubscript(x)) for x in T])
     try:
-        w = magnus_reduce_modulo_normal_closure(word, relator, T)    
-    except TypeError:
-        return None
+        if timelimit:
+            w  = func_timeout.func_timeout(timelimit, magnus_reduce_modulo_normal_closure, args=(word, relator, T))
+        else:
+            w = magnus_reduce_modulo_normal_closure(word, relator, T)    
+    except:
+        return np.nan
     return not w or all([x in T for x in w])
 
 
@@ -245,12 +249,12 @@ def batch_magnus_reduce_modulo_normal_closure(words, closures=None, n_proc=None)
 
     return results
 
-def batch_magnus_is_from_normal_closure(words, closures=None, n_proc=None):
+def batch_magnus_is_from_normal_closure(words, closures=None, n_proc=None, timelimit=None):
     if n_proc is not None and n_proc > 1:
         with mp.Pool(n_proc) as pool:
-            results = pool.starmap(magnus_is_from_normal_closure, [word_closure for word_closure in zip(words, closures)])
+            results = pool.starmap(magnus_is_from_normal_closure, [word_closure + (None, timelimit) for word_closure in zip(words, closures)])
     else:
-        results = [magnus_is_from_normal_closure(*word_closure) for word_closure in zip(words, closures)]
+        results = [magnus_is_from_normal_closure(*word_closure, timelimit=timelimit) for word_closure in zip(words, closures)]
     return results
 
 def impl_reduce_word_problem(word, relator, T=None):
